@@ -1,0 +1,11 @@
+# Binários compilados
+/bin/
+/main
+*.exe
+
+# Cobertura de testes
+coverage.out
+coverage.html
+
+# Variáveis de ambiente
+.env
