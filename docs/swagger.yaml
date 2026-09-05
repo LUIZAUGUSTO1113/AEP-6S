@@ -1,5 +1,24 @@
 basePath: /
 definitions:
+  internal_sample.CreateSampleRequest:
+    properties:
+      collected_at:
+        example: "2023-09-15T14:30:00Z"
+        type: string
+      parameter:
+        example: pH
+        type: string
+      river:
+        example: Rio Paraná
+        type: string
+      value:
+        example: 7.2
+        type: number
+    required:
+    - parameter
+    - river
+    - value
+    type: object
   internal_sample.Sample:
     properties:
       collected_at:
@@ -50,7 +69,7 @@ paths:
         name: sample
         required: true
         schema:
-          $ref: '#/definitions/internal_sample.Sample'
+          $ref: '#/definitions/internal_sample.CreateSampleRequest'
       produces:
       - application/json
       responses:

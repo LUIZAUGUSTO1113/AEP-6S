@@ -18,7 +18,7 @@ func NewController(service *Service) *Controller {
 // @Tags samples
 // @Accept json
 // @Produce json
-// @Param sample body Sample true "Sample data"
+// @Param sample body CreateSampleRequest true "Sample data"
 // @Success 201 {object} Sample
 // @Failure 400 {object} map[string]string "Bad Request (e.g. Invalid JSON, River is required)"
 // @Failure 500 {object} map[string]string "Internal Server Error"
@@ -26,21 +26,31 @@ func NewController(service *Service) *Controller {
 func (c *Controller) Create(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	var s Sample
-	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
+	var req CreateSampleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON."})
 		return
 	}
 
-	if err := c.service.CreateSample(r.Context(), &s); err != nil {
+	sample := Sample{
+		River:     req.River,
+		Parameter: req.Parameter,
+		Value:     req.Value,
+	}
+
+	if req.CollectedAt != nil {
+		sample.CollectedAt = *req.CollectedAt
+	}
+
+	if err := c.service.CreateSample(r.Context(), &sample); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(s)
+	_ = json.NewEncoder(w).Encode(sample)
 }
 
 // @Summary Get all samples

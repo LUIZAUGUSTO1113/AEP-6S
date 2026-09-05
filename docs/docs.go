@@ -65,7 +65,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_sample.Sample"
+                            "$ref": "#/definitions/internal_sample.CreateSampleRequest"
                         }
                     }
                 ],
@@ -99,6 +99,32 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "internal_sample.CreateSampleRequest": {
+            "type": "object",
+            "required": [
+                "parameter",
+                "river",
+                "value"
+            ],
+            "properties": {
+                "collected_at": {
+                    "type": "string",
+                    "example": "2023-09-15T14:30:00Z"
+                },
+                "parameter": {
+                    "type": "string",
+                    "example": "pH"
+                },
+                "river": {
+                    "type": "string",
+                    "example": "Rio Paraná"
+                },
+                "value": {
+                    "type": "number",
+                    "example": 7.2
+                }
+            }
+        },
         "internal_sample.Sample": {
             "type": "object",
             "properties": {
