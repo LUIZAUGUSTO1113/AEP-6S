@@ -1,0 +1,116 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "This is a sample server for monitoring water quality in rivers.",
+        "title": "Water Quality Monitoring API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "basePath": "/",
+    "paths": {
+        "/samples": {
+            "get": {
+                "description": "Retrieve all samples from the database",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "samples"
+                ],
+                "summary": "Get all samples",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/internal_sample.Sample"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Create a new sample with the provided data",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "samples"
+                ],
+                "summary": "Create a new sample",
+                "parameters": [
+                    {
+                        "description": "Sample data",
+                        "name": "sample",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_sample.Sample"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_sample.Sample"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request (e.g. Invalid JSON, River is required)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "internal_sample.Sample": {
+            "type": "object",
+            "properties": {
+                "collected_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "parameter": {
+                    "type": "string"
+                },
+                "river": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        }
+    }
+}

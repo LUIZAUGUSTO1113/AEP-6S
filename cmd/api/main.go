@@ -4,23 +4,28 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
-	"time"
 
 	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/database"
 	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/sample"
 	"github.com/joho/godotenv"
+
+	_ "github.com/LUIZAUGUSTO1113/AEP-6S/docs"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
+// @title Water Quality Monitoring API
+// @version 1.0
+// @description This is a sample server for monitoring water quality in rivers.
+// @BasePath /
 func main() {
 	err := godotenv.Load()
 	if err := godotenv.Load(); err != nil {
 		log.Println("[INFO] No .env file found, using system environment variables")
 	}
 
-	fmt.Println("====")
-	fmt.Println("PoC: Monitoramento de Qualidade da Água em Rios")
-	fmt.Println("====")
+	fmt.Println("Starting Water Quality Monitoring API...")
 
 	uri := database.BuildMongoURI()
 	client, err := database.ConnectMongoDB(uri)
@@ -38,26 +43,25 @@ func main() {
 
 	database := client.Database(dbName)
 	repository := sample.NewRepository(database)
-	ctx := context.Background()
+	service := sample.NewService(repository)
+	controller := sample.NewController(service)
 
-	sampleData := &sample.Sample{
-		River:       "Rio Paraná",
-		Parameter:   "pH",
-		Value:       7.2,
-		CollectedAt: time.Now(),
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("POST /samples", controller.Create)
+	mux.HandleFunc("GET /samples", controller.GetAll)
+
+	mux.HandleFunc("GET /swagger/", httpSwagger.WrapHandler)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
-	if err := repository.Create(ctx, sampleData); err != nil {
-		log.Fatalf("[ERROR] Failed to create sample: %v", err)
-	}
-	fmt.Printf("[INFO] Sample created successfully - ID: %s", sampleData.ID.Hex())
+	fmt.Printf("[INFO] Starting server on: http://localhost:%s\n", port)
+	fmt.Printf("[INFO] Swagger documentation available at: http://localhost:%s/swagger/index.html\n", port)
 
-	samples, err := repository.FindAll(ctx)
-	if err != nil {
-		log.Fatalf("[ERROR] Failed to retrieve samples: %v", err)
-	}
-	fmt.Printf("[INFO] Retrieved %d samples\n", len(samples))
-	for _, s := range samples {
-		fmt.Printf("River: %s, Parameter: %s, Value: %.2f, CollectedAt: %s\n", s.River, s.Parameter, s.Value, s.CollectedAt.Format(time.RFC3339))
+	if err := http.ListenAndServe(":"+port, mux); err != nil {
+		log.Fatalf("[ERROR] Failed to start server: %v", err)
 	}
 }

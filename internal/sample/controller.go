@@ -13,6 +13,16 @@ func NewController(service *Service) *Controller {
 	return &Controller{service: service}
 }
 
+// @Summary Create a new sample
+// @Description Create a new sample with the provided data
+// @Tags samples
+// @Accept json
+// @Produce json
+// @Param sample body Sample true "Sample data"
+// @Success 201 {object} Sample
+// @Failure 400 {object} map[string]string "Bad Request (e.g. Invalid JSON, River is required)"
+// @Failure 500 {object} map[string]string "Internal Server Error"
+// @Router /samples [post]
 func (c *Controller) Create(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -33,6 +43,13 @@ func (c *Controller) Create(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(s)
 }
 
+// @Summary Get all samples
+// @Description Retrieve all samples from the database
+// @Tags samples
+// @Produce json
+// @Success 200 {array} Sample
+// @Failure 500 {object} map[string]string "Internal Server Error"
+// @Router /samples [get]
 func (c *Controller) GetAll(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
