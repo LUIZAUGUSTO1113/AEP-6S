@@ -96,6 +96,59 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/samples/{id}": {
+            "delete": {
+                "description": "Delete a sample from the database",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "samples"
+                ],
+                "summary": "Delete a sample",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Sample ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request (e.g. Invalid ObjectID format)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -109,7 +162,7 @@ const docTemplate = `{
             "properties": {
                 "collected_at": {
                     "type": "string",
-                    "example": "2023-09-15T14:30:00Z"
+                    "example": "2026-09-04T21:00:00Z"
                 },
                 "parameter": {
                     "type": "string",

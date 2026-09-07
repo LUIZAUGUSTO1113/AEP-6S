@@ -61,3 +61,22 @@ func (r *Repository) FindByRiver(ctx context.Context, riverName string) ([]Sampl
 
 	return samples, nil
 }
+
+func (r *Repository) Delete(ctx context.Context, id string) error {
+	objectID, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return errInvalidIDFromRepo
+	}
+
+	filter := bson.M{"_id": objectID}
+	result, err := r.collection.DeleteOne(ctx, filter)
+	if err != nil {
+		return fmt.Errorf("failed to delete document in mongodb: %w", err)
+	}
+
+	if result.DeletedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return nil
+}

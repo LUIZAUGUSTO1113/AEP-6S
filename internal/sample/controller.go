@@ -2,6 +2,7 @@ package sample
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 )
 
@@ -72,4 +73,35 @@ func (c *Controller) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(samples)
+}
+
+// @Summary Delete a sample
+// @Description Delete a sample from the database
+// @Tags samples
+// @Produce json
+// @Param id path string true "Sample ID"
+// @Success 204 "No Content"
+// @Failure 400 {object} map[string]string "Bad Request (e.g. Invalid ObjectID format)"
+// @Failure 404 {object} map[string]string "Not Found"
+// @Failure 500 {object} map[string]string "Internal Server Error"
+// @Router /samples/{id} [delete]
+func (c *Controller) DeleteById(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	id := r.PathValue("id")
+	err := c.service.DeleteSample(r.Context(), id)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidID):
+			w.WriteHeader(http.StatusBadRequest)
+		case errors.Is(err, ErrSampleNotFound):
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -3,7 +3,7 @@ definitions:
   internal_sample.CreateSampleRequest:
     properties:
       collected_at:
-        example: "2023-09-15T14:30:00Z"
+        example: "2026-09-04T21:00:00Z"
         type: string
       parameter:
         example: pH
@@ -90,6 +90,41 @@ paths:
               type: string
             type: object
       summary: Create a new sample
+      tags:
+      - samples
+  /samples/{id}:
+    delete:
+      description: Delete a sample from the database
+      parameters:
+      - description: Sample ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request (e.g. Invalid ObjectID format)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Delete a sample
       tags:
       - samples
 swagger: "2.0"
