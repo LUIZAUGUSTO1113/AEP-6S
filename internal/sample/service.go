@@ -4,31 +4,48 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 var (
-	ErrInvalidID      = errors.New("invalid sample id format")
-	ErrSampleNotFound = mongo.ErrNoDocuments
+	ErrRiverRequired     = errors.New("River is required.")
+	ErrParameterRequired = errors.New("Parameter is required.")
+	ErrInvalidID         = errors.New("invalid sample id format")
+	ErrSampleNotFound    = mongo.ErrNoDocuments
+	ErrInvalidPH         = errors.New("pH must be between 0 and 14 (inclusive).")
 )
 
-type Service struct {
-	repo *Repository
+// SampleRepository defines the persistence operations used by Service.
+type SampleRepository interface {
+	Create(context.Context, *Sample) error
+	FindAll(context.Context) ([]Sample, error)
+	Update(context.Context, string, *Sample) error
+	FindByID(context.Context, string) (*Sample, error)
+	Delete(context.Context, string) error
 }
 
-func NewService(repo *Repository) *Service {
+type Service struct {
+	repo SampleRepository
+}
+
+func NewService(repo SampleRepository) *Service {
 	return &Service{repo: repo}
 }
 
 func (s *Service) CreateSample(ctx context.Context, sample *Sample) error {
 	if sample.River == "" {
-		return errors.New("River is required.")
+		return ErrRiverRequired
 	}
 
 	if sample.Parameter == "" {
-		return errors.New("Parameter is required.")
+		return ErrParameterRequired
+	}
+
+	if err := validatePH(sample); err != nil {
+		return err
 	}
 
 	if sample.CollectedAt.IsZero() {
@@ -58,11 +75,15 @@ func (s *Service) DeleteSample(ctx context.Context, id string) error {
 
 func (s *Service) UpdateSample(ctx context.Context, id string, sample *Sample) (*Sample, error) {
 	if sample.River == "" {
-		return nil, errors.New("River is required.")
+		return nil, ErrRiverRequired
 	}
 
 	if sample.Parameter == "" {
-		return nil, errors.New("Parameter is required.")
+		return nil, ErrParameterRequired
+	}
+
+	if err := validatePH(sample); err != nil {
+		return nil, err
 	}
 
 	if sample.CollectedAt.IsZero() {
@@ -88,3 +109,10 @@ func (s *Service) UpdateSample(ctx context.Context, id string, sample *Sample) (
 }
 
 var errInvalidIDFromRepo = errors.New("invalid object id format")
+
+func validatePH(sample *Sample) error {
+	if strings.EqualFold(strings.TrimSpace(sample.Parameter), "pH") && !(sample.Value >= 0 && sample.Value <= 14) {
+		return ErrInvalidPH
+	}
+	return nil
+}

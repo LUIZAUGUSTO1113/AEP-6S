@@ -45,7 +45,12 @@ func (c *Controller) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.service.CreateSample(r.Context(), &sample); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		switch {
+		case errors.Is(err, ErrRiverRequired), errors.Is(err, ErrParameterRequired), errors.Is(err, ErrInvalidPH):
+			w.WriteHeader(http.StatusBadRequest)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
@@ -142,11 +147,11 @@ func (c *Controller) Update(w http.ResponseWriter, r *http.Request) {
 	updated, err := c.service.UpdateSample(r.Context(), id, &sample)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrInvalidID):
+		case errors.Is(err, ErrInvalidID), errors.Is(err, ErrInvalidPH):
 			w.WriteHeader(http.StatusBadRequest)
 		case errors.Is(err, ErrSampleNotFound):
 			w.WriteHeader(http.StatusNotFound)
-		case err.Error() == "River is required." || err.Error() == "Parameter is required.":
+		case errors.Is(err, ErrRiverRequired), errors.Is(err, ErrParameterRequired):
 			w.WriteHeader(http.StatusBadRequest)
 		default:
 			w.WriteHeader(http.StatusInternalServerError)
