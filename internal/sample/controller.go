@@ -105,3 +105,56 @@ func (c *Controller) DeleteById(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// @Summary Update a sample
+// @Description Fully replace an existing sample by ID (idempotent PUT)
+// @Tags samples
+// @Accept json
+// @Produce json
+// @Param id path string true "Sample ID"
+// @Param sample body UpdateSampleRequest true "Full sample replacement data"
+// @Success 200 {object} Sample
+// @Failure 400 {object} map[string]string "Bad Request (e.g. Invalid JSON, River is required, Parameter is required)"
+// @Failure 404 {object} map[string]string "Not Found"
+// @Failure 500 {object} map[string]string "Internal Server Error"
+// @Router /samples/{id} [put]
+func (c *Controller) Update(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	id := r.PathValue("id")
+
+	var req UpdateSampleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON."})
+		return
+	}
+
+	sample := Sample{
+		River:     req.River,
+		Parameter: req.Parameter,
+		Value:     req.Value,
+	}
+	if req.CollectedAt != nil {
+		sample.CollectedAt = *req.CollectedAt
+	}
+
+	updated, err := c.service.UpdateSample(r.Context(), id, &sample)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidID):
+			w.WriteHeader(http.StatusBadRequest)
+		case errors.Is(err, ErrSampleNotFound):
+			w.WriteHeader(http.StatusNotFound)
+		case err.Error() == "River is required." || err.Error() == "Parameter is required.":
+			w.WriteHeader(http.StatusBadRequest)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(updated)
+}

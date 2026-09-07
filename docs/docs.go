@@ -98,6 +98,72 @@ const docTemplate = `{
             }
         },
         "/samples/{id}": {
+            "put": {
+                "description": "Fully replace an existing sample by ID (idempotent PUT)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "samples"
+                ],
+                "summary": "Update a sample",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Sample ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Full sample replacement data",
+                        "name": "sample",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_sample.UpdateSampleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_sample.Sample"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request (e.g. Invalid JSON, River is required, Parameter is required)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
             "delete": {
                 "description": "Delete a sample from the database",
                 "produces": [
@@ -195,6 +261,32 @@ const docTemplate = `{
                 },
                 "value": {
                     "type": "number"
+                }
+            }
+        },
+        "internal_sample.UpdateSampleRequest": {
+            "type": "object",
+            "required": [
+                "parameter",
+                "river",
+                "value"
+            ],
+            "properties": {
+                "collected_at": {
+                    "type": "string",
+                    "example": "2026-09-06T10:00:00Z"
+                },
+                "parameter": {
+                    "type": "string",
+                    "example": "Turbidity"
+                },
+                "river": {
+                    "type": "string",
+                    "example": "Rio Iguaçu"
+                },
+                "value": {
+                    "type": "number",
+                    "example": 15.5
                 }
             }
         }

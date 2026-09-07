@@ -32,6 +32,25 @@ definitions:
       value:
         type: number
     type: object
+  internal_sample.UpdateSampleRequest:
+    properties:
+      collected_at:
+        example: "2026-09-06T10:00:00Z"
+        type: string
+      parameter:
+        example: Turbidity
+        type: string
+      river:
+        example: Rio Iguaçu
+        type: string
+      value:
+        example: 15.5
+        type: number
+    required:
+    - parameter
+    - river
+    - value
+    type: object
 info:
   contact: {}
   description: This is a sample server for monitoring water quality in rivers.
@@ -125,6 +144,51 @@ paths:
               type: string
             type: object
       summary: Delete a sample
+      tags:
+      - samples
+    put:
+      consumes:
+      - application/json
+      description: Fully replace an existing sample by ID (idempotent PUT)
+      parameters:
+      - description: Sample ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Full sample replacement data
+        in: body
+        name: sample
+        required: true
+        schema:
+          $ref: '#/definitions/internal_sample.UpdateSampleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_sample.Sample'
+        "400":
+          description: Bad Request (e.g. Invalid JSON, River is required, Parameter
+            is required)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update a sample
       tags:
       - samples
 swagger: "2.0"
