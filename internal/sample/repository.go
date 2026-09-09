@@ -2,6 +2,7 @@ package sample
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -60,4 +61,62 @@ func (r *Repository) FindByRiver(ctx context.Context, riverName string) ([]Sampl
 	}
 
 	return samples, nil
+}
+
+func (r *Repository) Delete(ctx context.Context, id string) error {
+	objectID, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return errInvalidIDFromRepo
+	}
+
+	filter := bson.M{"_id": objectID}
+	result, err := r.collection.DeleteOne(ctx, filter)
+	if err != nil {
+		return fmt.Errorf("failed to delete document in mongodb: %w", err)
+	}
+
+	if result.DeletedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return nil
+}
+
+func (r *Repository) Update(ctx context.Context, id string, sample *Sample) error {
+	objectID, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return errInvalidIDFromRepo
+	}
+
+	sample.ID = objectID
+
+	filter := bson.M{"_id": objectID}
+	result, err := r.collection.ReplaceOne(ctx, filter, sample)
+	if err != nil {
+		return fmt.Errorf("failed to replace document in mongodb: %w", err)
+	}
+
+	if result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return nil
+}
+
+func (r *Repository) FindByID(ctx context.Context, id string) (*Sample, error) {
+	objectID, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, errInvalidIDFromRepo
+	}
+
+	var sample Sample
+	filter := bson.M{"_id": objectID}
+	if err := r.collection.FindOne(ctx, filter).Decode(&sample); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, mongo.ErrNoDocuments
+		}
+		return nil, fmt.Errorf("error querying sample by id %s: %w", id, err)
+	}
+
+	return &sample, nil
 }

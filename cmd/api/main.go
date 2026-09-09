@@ -50,6 +50,8 @@ func main() {
 
 	mux.HandleFunc("POST /samples", controller.Create)
 	mux.HandleFunc("GET /samples", controller.GetAll)
+	mux.HandleFunc("PUT /samples/{id}", controller.Update)
+	mux.HandleFunc("DELETE /samples/{id}", controller.DeleteById)
 
 	mux.HandleFunc("GET /swagger/", httpSwagger.WrapHandler)
 

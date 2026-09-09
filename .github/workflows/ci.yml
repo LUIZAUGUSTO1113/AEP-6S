@@ -9,16 +9,20 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MONGO_TEST_URI: mongodb://localhost:27018
 
     services:
       mongodb:
         image: mongo:7.0
-        env:
-          MONGO_INITDB_ROOT_USERNAME: ${{ secrets.MONGO_CI_USERNAME }}
-          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_CI_PASSWORD }}
-          MONGO_INITDB_DATABASE: water_monitoring_test
         ports:
-          - 27017:27017
+          - 27018:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'quit(db.adminCommand(\"ping\").ok ? 0 : 1)'"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
 
     steps:
       - name: Checkout repository
@@ -27,7 +31,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version-file: go.mod
 
       - name: Install dependencies
         run: go mod download
@@ -35,9 +39,25 @@ jobs:
       - name: Build application
         run: go build -v ./...
 
-      - name: Run automated teste with coverage
-        env:
-          MONGO_URI: "mongodb://${{secrets.MONGO_CI_USERNAME}}:${{secrets.MONGO_CI_PASSWORD}}@localhost:27017/?authSource=admin"
+      - name: Run automated tests with coverage
         run: |
           go test -v -coverprofile=coverage.out ./...
           go tool cover -func=coverage.out
+
+      - name: Generate HTML coverage
+        run: go tool cover -html=coverage.out -o coverage.html
+
+      - name: Enforce at least 70 percent total coverage
+        shell: bash
+        run: |
+          go tool cover -func=coverage.out | awk '/^total:/ { found=1; value=$3; sub(/%$/, "", value); print "Total coverage: " value "%"; if (value+0 < 70) exit 1 } END { if (!found) exit 1 }'
+
+      - name: Upload coverage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.out
+            coverage.html
+          if-no-files-found: warn

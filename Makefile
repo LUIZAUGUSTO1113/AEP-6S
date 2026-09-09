@@ -1,8 +1,8 @@
-.PHONY: swagger run test test-html docker-up docker-down docker-all
+.PHONY: swagger run test test-html test-unit test-db-up test-db-down docker-up docker-down docker-all
 
 # Regenerate Swagger documentation
 swagger:
-	swag init -g cmd/api/main.go --parseDependency --parseInternal
+	swag init -g main.go -d cmd/api,internal/sample --parseInternal
 
 # Fast local development: regenerate Swagger and run native Go
 run: swagger
@@ -22,9 +22,19 @@ docker-all:
 
 # Run automated tests and display the coverage report
 test:
-	go test -v -coverprofile=coverage.out ./...
-	go tool cover -func=coverage.out
+	go test -v "-coverprofile=coverage.out" ./...
+	go tool cover "-func=coverage.out"
 
 # Generate the visual coverage report in an HTML page
 test-html: test
-	go tool cover -html=coverage.out -o coverage.html
+	go tool cover "-html=coverage.out" -o coverage.html
+
+# Fast unit/HTTP tests, with integration tests explicitly skipped.
+test-unit:
+	go test -short -v ./...
+
+test-db-up:
+	docker compose -f docker-compose.test.yml up -d --wait
+
+test-db-down:
+	docker compose -f docker-compose.test.yml down
