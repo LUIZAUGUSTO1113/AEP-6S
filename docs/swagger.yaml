@@ -51,6 +51,98 @@ definitions:
     - river
     - value
     type: object
+  internal_station.Location:
+    properties:
+      city:
+        type: string
+      lat:
+        type: number
+      lng:
+        type: number
+      state:
+        type: string
+    type: object
+  internal_station.LocationRequest:
+    properties:
+      city:
+        example: Maringá
+        type: string
+      lat:
+        example: -23.42
+        type: number
+      lng:
+        example: -51.93
+        type: number
+      state:
+        example: PR
+        type: string
+    required:
+    - city
+    - state
+    type: object
+  internal_station.Station:
+    properties:
+      code:
+        type: string
+      id:
+        type: string
+      location:
+        $ref: '#/definitions/internal_station.Location'
+      name:
+        type: string
+      river:
+        type: string
+      thresholds:
+        items:
+          $ref: '#/definitions/internal_station.Threshold'
+        type: array
+    type: object
+  internal_station.StationRequest:
+    properties:
+      code:
+        example: IVA-001
+        type: string
+      location:
+        $ref: '#/definitions/internal_station.LocationRequest'
+      name:
+        example: Ponto Ponte do Rio Ivaí
+        type: string
+      river:
+        example: Rio Ivaí
+        type: string
+      thresholds:
+        items:
+          $ref: '#/definitions/internal_station.ThresholdRequest'
+        type: array
+    required:
+    - code
+    - location
+    - name
+    - river
+    type: object
+  internal_station.Threshold:
+    properties:
+      max:
+        type: number
+      min:
+        type: number
+      parameter:
+        type: string
+    type: object
+  internal_station.ThresholdRequest:
+    properties:
+      max:
+        example: 9
+        type: number
+      min:
+        example: 6
+        type: number
+      parameter:
+        example: pH
+        type: string
+    required:
+    - parameter
+    type: object
 info:
   contact: {}
   description: This is a sample server for monitoring water quality in rivers.
@@ -191,4 +283,195 @@ paths:
       summary: Update a sample
       tags:
       - samples
+  /stations:
+    get:
+      description: Retrieve every monitoring station
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/internal_station.Station'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List stations
+      tags:
+      - stations
+    post:
+      consumes:
+      - application/json
+      description: Create a monitoring station with nested location and thresholds.
+        The code must be unique.
+      parameters:
+      - description: Station data
+        in: body
+        name: station
+        required: true
+        schema:
+          $ref: '#/definitions/internal_station.StationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_station.Station'
+        "400":
+          description: Bad Request (e.g. Invalid JSON, Name is required, pH threshold
+            out of range)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict (station code already exists)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a station
+      tags:
+      - stations
+  /stations/{id}:
+    delete:
+      description: Delete a station. Refused with 409 while any sample still references
+        it.
+      parameters:
+      - description: Station ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request (invalid ObjectID format)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict (station still has samples)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Delete a station
+      tags:
+      - stations
+    get:
+      description: Retrieve one station by ID
+      parameters:
+      - description: Station ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_station.Station'
+        "400":
+          description: Bad Request (invalid ObjectID format)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a station
+      tags:
+      - stations
+    put:
+      consumes:
+      - application/json
+      description: Replace every editable field of a station (idempotent PUT)
+      parameters:
+      - description: Station ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Full station replacement data
+        in: body
+        name: station
+        required: true
+        schema:
+          $ref: '#/definitions/internal_station.StationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_station.Station'
+        "400":
+          description: Bad Request (e.g. Invalid JSON, invalid ObjectID, validation
+            error)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict (station code already exists)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update a station
+      tags:
+      - stations
 swagger: "2.0"

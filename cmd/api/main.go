@@ -9,6 +9,7 @@ import (
 
 	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/database"
 	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/sample"
+	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/station"
 	"github.com/joho/godotenv"
 
 	_ "github.com/LUIZAUGUSTO1113/AEP-6S/docs"
@@ -20,7 +21,6 @@ import (
 // @description This is a sample server for monitoring water quality in rivers.
 // @BasePath /
 func main() {
-	err := godotenv.Load()
 	if err := godotenv.Load(); err != nil {
 		log.Println("[INFO] No .env file found, using system environment variables")
 	}
@@ -46,7 +46,21 @@ func main() {
 	service := sample.NewService(repository)
 	controller := sample.NewController(service)
 
+	stationRepository := station.NewRepository(database)
+	if err := stationRepository.EnsureIndexes(context.Background()); err != nil {
+		log.Fatalf("[ERROR] %v", err)
+	}
+	// TODO: pass the sample repository as SampleCounter once it implements
+	// CountByStation, then register DELETE /stations/{id} below.
+	stationService := station.NewService(stationRepository, nil)
+	stationController := station.NewController(stationService)
+
 	mux := http.NewServeMux()
+
+	mux.HandleFunc("POST /stations", stationController.Create)
+	mux.HandleFunc("GET /stations", stationController.GetAll)
+	mux.HandleFunc("GET /stations/{id}", stationController.GetByID)
+	mux.HandleFunc("PUT /stations/{id}", stationController.Update)
 
 	mux.HandleFunc("POST /samples", controller.Create)
 	mux.HandleFunc("GET /samples", controller.GetAll)

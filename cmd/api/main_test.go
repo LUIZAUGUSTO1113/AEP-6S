@@ -68,6 +68,10 @@ func TestMainHTTPIntegration(t *testing.T) {
 		{"POST", "/samples", `{"river":"Rio","parameter":"pH","value":15}`, 400},
 		{"PUT", "/samples/invalid", `{"river":"Rio","parameter":"pH","value":7}`, 400},
 		{"DELETE", "/samples/invalid", "", 400},
+		{"GET", "/stations", "", 200},
+		{"POST", "/stations", `{"name":"N","river":"R","code":"C","location":{"city":"X","state":"PR"},"thresholds":[{"parameter":"pH","max":15}]}`, 400},
+		{"GET", "/stations/invalid", "", 400},
+		{"PUT", "/stations/invalid", "{}", 400},
 		{"GET", "/unknown", "", 404},
 	} {
 		request, err := http.NewRequest(tc.method, base+tc.path, strings.NewReader(tc.body))
