@@ -208,6 +208,288 @@
                     }
                 }
             }
+        },
+        "/stations": {
+            "get": {
+                "description": "Retrieve every monitoring station",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stations"
+                ],
+                "summary": "List stations",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/internal_station.Station"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Create a monitoring station with nested location and thresholds. The code must be unique.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stations"
+                ],
+                "summary": "Create a station",
+                "parameters": [
+                    {
+                        "description": "Station data",
+                        "name": "station",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_station.StationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_station.Station"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request (e.g. Invalid JSON, Name is required, pH threshold out of range)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict (station code already exists)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/stations/{id}": {
+            "get": {
+                "description": "Retrieve one station by ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stations"
+                ],
+                "summary": "Get a station",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Station ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_station.Station"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request (invalid ObjectID format)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Replace every editable field of a station (idempotent PUT)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stations"
+                ],
+                "summary": "Update a station",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Station ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Full station replacement data",
+                        "name": "station",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_station.StationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_station.Station"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request (e.g. Invalid JSON, invalid ObjectID, validation error)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict (station code already exists)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Delete a station. Refused with 409 while any sample still references it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stations"
+                ],
+                "summary": "Delete a station",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Station ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request (invalid ObjectID format)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict (station still has samples)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -280,6 +562,140 @@
                 "value": {
                     "type": "number",
                     "example": 15.5
+                }
+            }
+        },
+        "internal_station.Location": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string"
+                },
+                "lat": {
+                    "type": "number"
+                },
+                "lng": {
+                    "type": "number"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_station.LocationRequest": {
+            "type": "object",
+            "required": [
+                "city",
+                "state"
+            ],
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "example": "Maringá"
+                },
+                "lat": {
+                    "type": "number",
+                    "example": -23.42
+                },
+                "lng": {
+                    "type": "number",
+                    "example": -51.93
+                },
+                "state": {
+                    "type": "string",
+                    "example": "PR"
+                }
+            }
+        },
+        "internal_station.Station": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "location": {
+                    "$ref": "#/definitions/internal_station.Location"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "river": {
+                    "type": "string"
+                },
+                "thresholds": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_station.Threshold"
+                    }
+                }
+            }
+        },
+        "internal_station.StationRequest": {
+            "type": "object",
+            "required": [
+                "code",
+                "location",
+                "name",
+                "river"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "IVA-001"
+                },
+                "location": {
+                    "$ref": "#/definitions/internal_station.LocationRequest"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Ponto Ponte do Rio Ivaí"
+                },
+                "river": {
+                    "type": "string",
+                    "example": "Rio Ivaí"
+                },
+                "thresholds": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_station.ThresholdRequest"
+                    }
+                }
+            }
+        },
+        "internal_station.Threshold": {
+            "type": "object",
+            "properties": {
+                "max": {
+                    "type": "number"
+                },
+                "min": {
+                    "type": "number"
+                },
+                "parameter": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_station.ThresholdRequest": {
+            "type": "object",
+            "required": [
+                "parameter"
+            ],
+            "properties": {
+                "max": {
+                    "type": "number",
+                    "example": 9
+                },
+                "min": {
+                    "type": "number",
+                    "example": 6
+                },
+                "parameter": {
+                    "type": "string",
+                    "example": "pH"
                 }
             }
         }

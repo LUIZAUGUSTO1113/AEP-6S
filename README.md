@@ -66,6 +66,123 @@ Com a aplicação rodando, acesse a documentação interativa no navegador:
 
 ---
 
+## Estrutura do Banco
+
+O banco `water_monitoring` tem três coleções. A estação é o centro do modelo:
+cada coleta aponta para uma estação, e cada alerta aponta para a coleta que o
+gerou e para a estação dela.
+
+```mermaid
+erDiagram
+    stations ||--o{ samples : "station_id"
+    stations ||--o{ alerts : "station_id"
+    samples ||--o| alerts : "sample_id"
+    stations {
+        ObjectId _id
+        string name
+        string river
+        string code "único"
+        object location "aninhado"
+        array thresholds "subdocumentos"
+    }
+    samples {
+        ObjectId _id
+        ObjectId station_id
+        string river
+        string parameter
+        double value
+        date collected_at
+    }
+    alerts {
+        ObjectId _id
+        ObjectId sample_id
+        ObjectId station_id
+        string parameter
+        double value
+        string message
+        date created_at
+    }
+```
+
+### `stations` — documento complexo
+
+```json
+{
+  "_id": "ObjectId",
+  "name": "Ponto Ponte do Rio Ivaí",
+  "river": "Rio Ivaí",
+  "code": "IVA-001",
+  "location": { "city": "Maringá", "state": "PR", "lat": -23.42, "lng": -51.93 },
+  "thresholds": [
+    { "parameter": "pH", "min": 6.0, "max": 9.0 },
+    { "parameter": "Turbidity", "max": 100 }
+  ]
+}
+```
+
+- `location` é um objeto aninhado e `thresholds` é uma lista de subdocumentos.
+  Os dois **ficam dentro da estação** porque nascem, mudam e morrem com ela, só
+  fazem sentido para aquela estação e são sempre lidos junto com ela. Com isso,
+  uma única leitura (`FindOne`) traz tudo o que é preciso para avaliar uma coleta,
+  e a lista de limiares de uma estação é pequena e limitada.
+- `min` e `max` são opcionais: um limiar pode ter só um dos lados. Um limite
+  ausente não é gravado; um limite `0` é gravado e vale como limite.
+- `code` tem **índice único** (`code_unique`), criado na inicialização da API.
+  Código repetido responde HTTP 409.
+- Validações: nome, rio, código, cidade e UF obrigatórios; todo limiar precisa
+  de parâmetro; `min ≤ max` quando os dois existem; limiar de pH entre 0 e 14.
+
+### `samples` — referência à estação
+
+```json
+{
+  "_id": "ObjectId",
+  "station_id": "ObjectId da estação",
+  "river": "Rio Ivaí",
+  "parameter": "pH",
+  "value": 7.2,
+  "collected_at": "2026-10-27T14:00:00Z"
+}
+```
+
+- A coleta **referencia** a estação por `station_id` em vez de ficar dentro dela,
+  porque as coletas crescem sem limite ao longo do tempo. Aninhadas, elas fariam
+  o documento da estação crescer até o limite de 16 MB do MongoDB e obrigariam a
+  carregar todo o histórico a cada leitura da estação. Separadas, podem ser
+  filtradas (`GET /samples?station_id=`), editadas e removidas individualmente.
+- A API só aceita `station_id` de uma estação existente.
+- `river` é copiado da estação no momento da gravação, para que a coleta continue
+  legível sozinha.
+- Uma estação só pode ser excluída quando não há coletas dela (HTTP 409 caso
+  contrário), para que nenhuma coleta fique apontando para uma estação inexistente.
+
+### `alerts` — relacionamento materializado
+
+```json
+{
+  "_id": "ObjectId",
+  "sample_id": "ObjectId",
+  "station_id": "ObjectId",
+  "parameter": "pH",
+  "value": 4.2,
+  "message": "pH abaixo do mínimo 6.0 da estação IVA-001",
+  "created_at": "2026-10-27T14:00:00Z"
+}
+```
+
+- Não existe `POST /alerts`: o alerta é criado pela API quando uma coleta fica
+  fora de um limiar da estação. A coleta **é gravada mesmo assim**, porque o
+  registro da poluição importa.
+- A regra fica em `Station.Evaluate(parameter, value)`: compara o parâmetro sem
+  diferenciar maiúsculas e minúsculas, trata os limites como inclusivos e, sem
+  limiar para aquele parâmetro, não gera alerta.
+- O alerta guarda `sample_id` e `station_id` como referências, mas também copia
+  `parameter`, `value` e `message`. Assim, listar e filtrar alertas
+  (`GET /alerts?station_id=`) não exige consultar as outras coleções, e o alerta
+  continua mostrando o que foi violado mesmo que os limiares da estação mudem depois.
+
+---
+
 ## Testes Automatizados e Cobertura
 
 Os testes usam `testing` e Testify. Service e Controller usam um repositório
@@ -134,6 +251,9 @@ docker compose -f docker-compose.test.yml down
 - Service: obrigatoriedade de rio/parâmetro, pH de 0 a 14, datas, operações válidas e propagação de erros.
 - Controller: respostas JSON, códigos HTTP, dados inválidos e falhas simuladas do banco.
 - Repository: Create, FindAll, FindByID, FindByRiver, Update e Delete no MongoDB; ID duplicado, documentos inválidos e cancelamento.
+- Estações: validações do documento aninhado (campos obrigatórios, `min ≤ max`,
+  limiar de pH entre 0 e 14), regra de limiar (`Evaluate`), exclusão bloqueada
+  quando há coletas (409), código duplicado (409) e CRUD com índice único no MongoDB.
 - Database: montagem da URI, configuração isolada e conexão com o banco de testes.
 - Inicialização: `cmd/api/main_test.go` inicia o servidor no processo de teste desse
   pacote, em porta dinâmica, e verifica as rotas reais e o Swagger. O servidor
