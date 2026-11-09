@@ -16,7 +16,7 @@ import (
 )
 
 func controllerRouter(repo StationRepository, counter SampleCounter) http.Handler {
-	c := NewController(NewService(repo, counter))
+	c := NewController(NewService(repo, counter, directTransaction))
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /stations", c.Create)
 	mux.HandleFunc("GET /stations", c.GetAll)

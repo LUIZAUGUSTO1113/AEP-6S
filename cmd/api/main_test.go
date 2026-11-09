@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -11,6 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/alert"
+	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/sample"
+	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/station"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -50,7 +54,7 @@ func TestMainHTTPIntegration(t *testing.T) {
 	t.Setenv("PORT", fmt.Sprint(port))
 	go main()
 	base := fmt.Sprintf("http://127.0.0.1:%d", port)
-	httpClient := &http.Client{Timeout: time.Second}
+	httpClient := &http.Client{Timeout: 5 * time.Second}
 	defer httpClient.CloseIdleConnections()
 	require.Eventually(t, func() bool {
 		response, err := httpClient.Get(base + "/samples")
@@ -60,14 +64,23 @@ func TestMainHTTPIntegration(t *testing.T) {
 		defer response.Body.Close()
 		return response.StatusCode == http.StatusOK
 	}, 10*time.Second, 50*time.Millisecond, "API did not become ready")
+	missing := bson.NewObjectID().Hex()
+	sampleBody := func(stationID string, value float64) string {
+		return fmt.Sprintf(`{"station_id":%q,"parameter":"pH","value":%g,"river":"ignored"}`, stationID, value)
+	}
 	for _, tc := range []struct {
 		method, path, body string
 		status             int
 	}{
 		{"GET", "/swagger/index.html", "", 200},
-		{"POST", "/samples", `{"river":"Rio","parameter":"pH","value":15}`, 400},
-		{"PUT", "/samples/invalid", `{"river":"Rio","parameter":"pH","value":7}`, 400},
+		{"POST", "/samples", sampleBody(missing, 15), 400},
+		{"POST", "/samples", sampleBody(missing, 7), 404},
+		{"PUT", "/samples/invalid", sampleBody(missing, 7), 400},
+		{"PUT", "/samples/" + bson.NewObjectID().Hex(), sampleBody(missing, 7), 404},
 		{"DELETE", "/samples/invalid", "", 400},
+		{"GET", "/samples?station_id=invalid", "", 400},
+		{"GET", "/alerts?station_id=invalid", "", 400},
+		{"POST", "/alerts", "{}", 405},
 		{"GET", "/stations", "", 200},
 		{"POST", "/stations", `{"name":"N","river":"R","code":"C","location":{"city":"X","state":"PR"},"thresholds":[{"parameter":"pH","max":15}]}`, 400},
 		{"GET", "/stations/invalid", "", 400},
@@ -84,5 +97,130 @@ func TestMainHTTPIntegration(t *testing.T) {
 		require.NoError(t, readErr)
 		require.NoError(t, closeErr)
 		require.Equal(t, tc.status, response.StatusCode, tc.method+" "+tc.path)
+	}
+
+	request := func(method, path, body string) (int, []byte, error) {
+		req, err := http.NewRequest(method, base+path, strings.NewReader(body))
+		if err != nil {
+			return 0, nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return 0, nil, err
+		}
+		defer resp.Body.Close()
+		data, err := io.ReadAll(resp.Body)
+		return resp.StatusCode, data, err
+	}
+	call := func(method, path, body string, want int, output any) {
+		t.Helper()
+		status, data, err := request(method, path, body)
+		require.NoError(t, err)
+		require.Equal(t, want, status, "%s %s: %s", method, path, data)
+		if output != nil {
+			require.NoError(t, json.Unmarshal(data, output))
+		}
+	}
+	createStation := func(code string) string {
+		t.Helper()
+		body := fmt.Sprintf(`{"name":"Ponte","river":"Rio Ivaí","code":%q,"location":{"city":"Maringá","state":"PR"},"thresholds":[{"parameter":"pH","min":6,"max":9}]}`, code)
+		var s station.Station
+		call("POST", "/stations", body, 201, &s)
+		return s.ID.Hex()
+	}
+
+	stationID := createStation("IVA-001")
+	stationPath := "/stations/" + stationID
+	alertsPath := "/alerts?station_id=" + stationID
+	samplesPath := "/samples?station_id=" + stationID
+	var valid, invalid sample.Sample
+	call("POST", "/samples", sampleBody(stationID, 7.2), 201, &valid)
+	require.Equal(t, "Rio Ivaí", valid.River)
+	var alerts []alert.Alert
+	call("GET", alertsPath, "", 200, &alerts)
+	require.Equal(t, []alert.Alert{}, alerts)
+	call("POST", "/samples", sampleBody(stationID, 4.2), 201, &invalid)
+	call("GET", alertsPath, "", 200, &alerts)
+	require.Len(t, alerts, 1)
+	firstAlert := alerts[0]
+	require.Equal(t, invalid.ID, firstAlert.SampleID)
+	require.Contains(t, firstAlert.Message, "IVA-001")
+
+	var samples []sample.Sample
+	call("GET", samplesPath, "", 200, &samples)
+	require.Len(t, samples, 2)
+	call("GET", "/samples?station_id="+missing, "", 200, &samples)
+	require.Equal(t, []sample.Sample{}, samples)
+	call("GET", "/alerts?station_id="+missing, "", 200, &alerts)
+	require.Equal(t, []alert.Alert{}, alerts)
+	call("DELETE", stationPath, "", 409, nil)
+
+	invalidPath := "/samples/" + invalid.ID.Hex()
+	call("PUT", invalidPath, sampleBody(stationID, 9.2), 200, nil)
+	call("GET", "/alerts", "", 200, &alerts)
+	require.Len(t, alerts, 1)
+	require.Equal(t, firstAlert.ID, alerts[0].ID)
+	require.Equal(t, firstAlert.CreatedAt, alerts[0].CreatedAt)
+	require.Equal(t, 9.2, alerts[0].Value)
+	call("PUT", invalidPath, sampleBody(stationID, 9), 200, nil)
+	call("GET", alertsPath, "", 200, &alerts)
+	require.Empty(t, alerts)
+
+	db := client.Database(dbName)
+	validator := func(rule bson.M) {
+		t.Helper()
+		err := db.RunCommand(ctx, bson.D{{Key: "collMod", Value: "alerts"}, {Key: "validator", Value: rule}}).Err()
+		require.NoError(t, err)
+	}
+	validator(bson.M{"value": bson.M{"$lt": 0}})
+	call("POST", "/samples", sampleBody(stationID, 4.2), 500, nil)
+	call("PUT", invalidPath, sampleBody(stationID, 4.2), 500, nil)
+	call("GET", samplesPath, "", 200, &samples)
+	require.Len(t, samples, 2)
+	for _, saved := range samples {
+		if saved.ID == invalid.ID {
+			require.Equal(t, 9.0, saved.Value)
+		}
+	}
+	validator(bson.M{})
+
+	call("PUT", invalidPath, sampleBody(stationID, 4.2), 200, nil)
+	call("GET", alertsPath, "", 200, &alerts)
+	require.Len(t, alerts, 1)
+	require.NotEqual(t, firstAlert.ID, alerts[0].ID)
+	call("DELETE", invalidPath, "", 204, nil)
+	call("GET", alertsPath, "", 200, &alerts)
+	require.Empty(t, alerts)
+	call("DELETE", "/samples/"+valid.ID.Hex(), "", 204, nil)
+	call("DELETE", stationPath, "", 204, nil)
+
+	raceStation := createStation("RACE-001")
+	type result struct {
+		status int
+		body   []byte
+		err    error
+	}
+	start := make(chan struct{})
+	post, remove := make(chan result, 1), make(chan result, 1)
+	go func() {
+		<-start
+		status, body, err := request("POST", "/samples", sampleBody(raceStation, 4.2))
+		post <- result{status, body, err}
+	}()
+	go func() {
+		<-start
+		status, body, err := request("DELETE", "/stations/"+raceStation, "")
+		remove <- result{status, body, err}
+	}()
+	close(start)
+	created, deleted := <-post, <-remove
+	require.NoError(t, created.err)
+	require.NoError(t, deleted.err)
+	if created.status == 201 {
+		require.Equal(t, 409, deleted.status, "%s", deleted.body)
+	} else {
+		require.Equal(t, 404, created.status, "%s", created.body)
+		require.Equal(t, 204, deleted.status, "%s", deleted.body)
 	}
 }

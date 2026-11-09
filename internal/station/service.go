@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/database"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
@@ -41,12 +42,13 @@ type SampleCounter interface {
 }
 
 type Service struct {
-	repo    StationRepository
-	samples SampleCounter
+	repo        StationRepository
+	samples     SampleCounter
+	transaction database.Transaction
 }
 
-func NewService(repo StationRepository, samples SampleCounter) *Service {
-	return &Service{repo: repo, samples: samples}
+func NewService(repo StationRepository, samples SampleCounter, transaction database.Transaction) *Service {
+	return &Service{repo: repo, samples: samples, transaction: transaction}
 }
 
 func (s *Service) CreateStation(ctx context.Context, station *Station) error {
@@ -71,8 +73,7 @@ func (s *Service) ListStations(ctx context.Context) ([]Station, error) {
 	return stations, nil
 }
 
-// GetStation loads one station. The sample service uses it to validate
-// station_id, copy the river and call Evaluate.
+// GetStation loads one station for the public read endpoint.
 func (s *Service) GetStation(ctx context.Context, id string) (*Station, error) {
 	objectID, err := bson.ObjectIDFromHex(id)
 	if err != nil {
@@ -124,19 +125,21 @@ func (s *Service) DeleteStation(ctx context.Context, id string) error {
 		return ErrInvalidID
 	}
 
-	count, err := s.samples.CountByStation(ctx, objectID)
-	if err != nil {
-		return fmt.Errorf("service failed to count station samples: %w", err)
-	}
-	if count > 0 {
-		return ErrStationHasSamples
-	}
-
-	if err := s.repo.Delete(ctx, objectID); err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return ErrStationNotFound
+	return s.transaction(ctx, func(ctx context.Context) error {
+		count, err := s.samples.CountByStation(ctx, objectID)
+		if err != nil {
+			return fmt.Errorf("service failed to count station samples: %w", err)
 		}
-		return fmt.Errorf("service failed to delete station: %w", err)
-	}
-	return nil
+		if count > 0 {
+			return ErrStationHasSamples
+		}
+
+		if err := s.repo.Delete(ctx, objectID); err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				return ErrStationNotFound
+			}
+			return fmt.Errorf("service failed to delete station: %w", err)
+		}
+		return nil
+	})
 }

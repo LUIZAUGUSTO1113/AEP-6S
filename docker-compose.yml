@@ -1,29 +1,40 @@
-version: "3.8"
-
 services:
   mongodb:
     image: mongo:7.0
-    container_name: water_monitoring_db
+    entrypoint: ["/bin/bash", "/usr/local/bin/start-mongo.sh"]
     ports:
-      - "${MONGO_PORT}:27017"
+      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
-      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:?set a MongoDB username in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:?set a MongoDB password in .env}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-water_monitoring}
+      MONGO_REPLICA_MEMBER: mongodb:27017
     volumes:
-      - mongo_data:/data/db
+      - mongo_entrega2_data:/data/db
+      - ./docker/start-mongo.sh:/usr/local/bin/start-mongo.sh:ro
+      - ./docker/replica-health.js:/usr/local/bin/replica-health.js:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mongosh --host mongodb --quiet --username "$${MONGO_INITDB_ROOT_USERNAME}" --password "$${MONGO_INITDB_ROOT_PASSWORD}" --authenticationDatabase admin --file /usr/local/bin/replica-health.js
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
 
   api:
     build: .
-    container_name: water_monitoring_api
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
     environment:
-      MONGO_URI: "mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/?authSource=admin"
-      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+      MONGO_HOST: mongodb
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-water_monitoring}
       PORT: ${PORT:-8080}
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
 
 volumes:
-  mongo_data:
+  mongo_entrega2_data:

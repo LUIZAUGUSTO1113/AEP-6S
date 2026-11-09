@@ -6,11 +6,11 @@ swagger:
 
 # Fast local development: regenerate Swagger and run native Go
 run: swagger
-	go run cmd/api/main.go
+	go run ./cmd/api
 
 # Start only the local MongoDB database for development
 docker-up:
-	docker compose up -d mongodb
+	docker compose up -d --wait mongodb
 
 # Stop Docker containers
 docker-down:

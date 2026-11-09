@@ -6,7 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/alert"
 	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/database"
 	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/sample"
 	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/station"
@@ -41,19 +43,25 @@ func main() {
 		dbName = "water_monitoring"
 	}
 
-	database := client.Database(dbName)
-	repository := sample.NewRepository(database)
-	service := sample.NewService(repository)
-	controller := sample.NewController(service)
-
-	stationRepository := station.NewRepository(database)
-	if err := stationRepository.EnsureIndexes(context.Background()); err != nil {
-		log.Fatalf("[ERROR] %v", err)
+	db := client.Database(dbName)
+	sampleRepository := sample.NewRepository(db)
+	stationRepository := station.NewRepository(db)
+	alertRepository := alert.NewRepository(db)
+	indexContext, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	for _, ensure := range []func(context.Context) error{
+		stationRepository.EnsureIndexes, sampleRepository.EnsureIndexes, alertRepository.EnsureIndexes,
+	} {
+		if err := ensure(indexContext); err != nil {
+			cancel()
+			log.Fatalf("[ERROR] Failed to initialize MongoDB indexes: %v", err)
+		}
 	}
-	// TODO: pass the sample repository as SampleCounter once it implements
-	// CountByStation, then register DELETE /stations/{id} below.
-	stationService := station.NewService(stationRepository, nil)
-	stationController := station.NewController(stationService)
+	cancel()
+
+	transaction := database.MongoTransaction(client)
+	sampleController := sample.NewController(sample.NewService(sampleRepository, stationRepository, alertRepository, transaction))
+	stationController := station.NewController(station.NewService(stationRepository, sampleRepository, transaction))
+	alertController := alert.NewController(alert.NewService(alertRepository))
 
 	mux := http.NewServeMux()
 
@@ -61,11 +69,14 @@ func main() {
 	mux.HandleFunc("GET /stations", stationController.GetAll)
 	mux.HandleFunc("GET /stations/{id}", stationController.GetByID)
 	mux.HandleFunc("PUT /stations/{id}", stationController.Update)
+	mux.HandleFunc("DELETE /stations/{id}", stationController.DeleteByID)
 
-	mux.HandleFunc("POST /samples", controller.Create)
-	mux.HandleFunc("GET /samples", controller.GetAll)
-	mux.HandleFunc("PUT /samples/{id}", controller.Update)
-	mux.HandleFunc("DELETE /samples/{id}", controller.DeleteById)
+	mux.HandleFunc("POST /samples", sampleController.Create)
+	mux.HandleFunc("GET /samples", sampleController.GetAll)
+	mux.HandleFunc("PUT /samples/{id}", sampleController.Update)
+	mux.HandleFunc("DELETE /samples/{id}", sampleController.DeleteById)
+
+	mux.HandleFunc("GET /alerts", alertController.GetAll)
 
 	mux.HandleFunc("GET /swagger/", httpSwagger.WrapHandler)
 
@@ -77,7 +88,7 @@ func main() {
 	fmt.Printf("[INFO] Starting server on: http://localhost:%s\n", port)
 	fmt.Printf("[INFO] Swagger documentation available at: http://localhost:%s/swagger/index.html\n", port)
 
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
+	if err := http.ListenAndServe(":"+port, allowVite(mux)); err != nil {
 		log.Fatalf("[ERROR] Failed to start server: %v", err)
 	}
 }

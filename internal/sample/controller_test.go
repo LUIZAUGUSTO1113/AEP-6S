@@ -16,7 +16,7 @@ import (
 )
 
 func controllerRouter(repo SampleRepository) http.Handler {
-	c := NewController(NewService(repo))
+	c := NewController(testService(repo))
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /samples", c.Create)
 	mux.HandleFunc("GET /samples", c.GetAll)
@@ -30,14 +30,16 @@ func TestControllerValidation(t *testing.T) {
 		for _, tc := range []struct{ name, body, message string }{
 			{"invalid JSON", "{", "Invalid JSON."},
 			{"invalid date", `{"collected_at":"yesterday"}`, "Invalid JSON."},
-			{"missing river", `{"parameter":"pH","value":7}`, ErrRiverRequired.Error()},
-			{"missing parameter", `{"river":"Rio","value":7}`, ErrParameterRequired.Error()},
-			{"invalid pH", `{"river":"Rio","parameter":"pH","value":15}`, ErrInvalidPH.Error()},
+			{"missing station", `{"parameter":"pH","value":7}`, ErrInvalidStationID.Error()},
+			{"invalid station", `{"station_id":"bad","parameter":"pH","value":7}`, ErrInvalidStationID.Error()},
+			{"missing value", fmt.Sprintf(`{"station_id":%q,"parameter":"pH"}`, testStationID.Hex()), ErrValueRequired.Error()},
+			{"missing parameter", fmt.Sprintf(`{"station_id":%q,"value":7}`, testStationID.Hex()), ErrParameterRequired.Error()},
+			{"invalid pH", fmt.Sprintf(`{"station_id":%q,"parameter":"pH","value":15}`, testStationID.Hex()), ErrInvalidPH.Error()},
 		} {
 			t.Run(method+"/"+tc.name, func(t *testing.T) {
 				path := "/samples"
 				if method == "PUT" {
-					path += "/id"
+					path += "/" + testSampleID.Hex()
 				}
 				response := httptest.NewRecorder()
 				controllerRouter(&repositoryStub{}).ServeHTTP(response, httptest.NewRequest(method, path, strings.NewReader(tc.body)))
@@ -68,7 +70,7 @@ func TestControllerWriteSuccess(t *testing.T) {
 						return &saved, nil
 					},
 				}
-				payload := map[string]any{"river": "Rio Paraná", "parameter": "pH", "value": 7.2}
+				payload := map[string]any{"river": "ignored", "station_id": testStationID.Hex(), "parameter": "pH", "value": 0}
 				date := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
 				if suppliedDate {
 					payload["collected_at"] = date
@@ -88,7 +90,8 @@ func TestControllerWriteSuccess(t *testing.T) {
 				require.Equal(t, id, got.ID)
 				require.Equal(t, "Rio Paraná", got.River)
 				require.Equal(t, "pH", got.Parameter)
-				require.Equal(t, 7.2, got.Value)
+				require.Equal(t, 0.0, got.Value)
+				require.Equal(t, &testStationID, got.StationID)
 				require.False(t, got.CollectedAt.IsZero())
 				if suppliedDate {
 					require.True(t, date.Equal(got.CollectedAt))
@@ -124,10 +127,10 @@ func TestControllerRepositoryErrors(t *testing.T) {
 			}
 			path := "/samples"
 			if tc.method == "PUT" || tc.method == "DELETE" {
-				path += "/id"
+				path += "/" + testSampleID.Hex()
 			}
 			response := httptest.NewRecorder()
-			controllerRouter(repo).ServeHTTP(response, httptest.NewRequest(tc.method, path, strings.NewReader(`{"river":"Rio","parameter":"pH","value":7}`)))
+			controllerRouter(repo).ServeHTTP(response, httptest.NewRequest(tc.method, path, strings.NewReader(fmt.Sprintf(`{"station_id":%q,"parameter":"pH","value":7}`, testStationID.Hex()))))
 			require.Equal(t, tc.status, response.Code)
 			var body map[string]string
 			require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
@@ -147,9 +150,13 @@ func TestControllerListAndDelete(t *testing.T) {
 		require.Equal(t, samples, got)
 	}
 	called := false
-	repo := &repositoryStub{delete: func(_ context.Context, id string) error { called = true; require.Equal(t, "id", id); return nil }}
+	repo := &repositoryStub{delete: func(_ context.Context, id string) error {
+		called = true
+		require.Equal(t, testSampleID.Hex(), id)
+		return nil
+	}}
 	response := httptest.NewRecorder()
-	controllerRouter(repo).ServeHTTP(response, httptest.NewRequest("DELETE", "/samples/id", nil))
+	controllerRouter(repo).ServeHTTP(response, httptest.NewRequest("DELETE", "/samples/"+testSampleID.Hex(), nil))
 	require.True(t, called)
 	require.Equal(t, 204, response.Code)
 	require.Empty(t, response.Body.String())
