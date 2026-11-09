@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 )
 
 type Controller struct {
@@ -47,7 +48,12 @@ func (c *Controller) Create(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} map[string]string "Internal Server Error"
 // @Router /samples [get]
 func (c *Controller) GetAll(w http.ResponseWriter, r *http.Request) {
-	samples, err := c.service.GetAllSamples(r.Context(), r.URL.Query().Get("station_id"))
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		writeError(w, ErrInvalidStationID)
+		return
+	}
+	samples, err := c.service.GetAllSamples(r.Context(), query.Get("station_id"))
 	if err != nil {
 		writeError(w, err)
 		return
