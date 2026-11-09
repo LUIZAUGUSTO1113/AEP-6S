@@ -45,7 +45,9 @@ func TestRepositoryCRUD(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, empty)
 	date := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
-	a := &Sample{River: "Rio Paraná", Parameter: "pH", Value: 7.2, CollectedAt: date}
+	stationID := bson.NewObjectID()
+	require.NoError(t, r.EnsureIndexes(ctx))
+	a := &Sample{StationID: &stationID, River: "Rio Paraná", Parameter: "pH", Value: 7.2, CollectedAt: date}
 	require.NoError(t, r.Create(ctx, a))
 	require.False(t, a.ID.IsZero())
 	b := &Sample{ID: bson.NewObjectID(), River: "Rio Iguaçu", Parameter: "Turbidity", Value: 25, CollectedAt: date}
@@ -58,13 +60,19 @@ func TestRepositoryCRUD(t *testing.T) {
 	all, err := r.FindAll(ctx)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []Sample{*a, *b}, all)
+	filteredByStation, err := r.FindByStation(ctx, stationID)
+	require.NoError(t, err)
+	require.Equal(t, []Sample{*a}, filteredByStation)
+	count, err := r.CountByStation(ctx, stationID)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, count)
 	filtered, err := r.FindByRiver(ctx, a.River)
 	require.NoError(t, err)
 	require.Equal(t, []Sample{*a}, filtered)
 	filtered, err = r.FindByRiver(ctx, "Unknown")
 	require.NoError(t, err)
 	require.Empty(t, filtered)
-	updated := &Sample{River: "Rio atualizado", Parameter: "pH", Value: 8, CollectedAt: date.Add(time.Hour)}
+	updated := &Sample{StationID: &stationID, River: "Rio atualizado", Parameter: "pH", Value: 8, CollectedAt: date.Add(time.Hour)}
 	require.NoError(t, r.Update(ctx, a.ID.Hex(), updated))
 	require.Equal(t, a.ID, updated.ID)
 	got, err = r.FindByID(ctx, a.ID.Hex())
@@ -73,6 +81,9 @@ func TestRepositoryCRUD(t *testing.T) {
 	// Matching an unchanged document must succeed even when ModifiedCount is zero.
 	require.NoError(t, r.Update(ctx, a.ID.Hex(), updated))
 	require.NoError(t, r.Delete(ctx, a.ID.Hex()))
+	count, err = r.CountByStation(ctx, stationID)
+	require.NoError(t, err)
+	require.Zero(t, count)
 	_, err = r.FindByID(ctx, a.ID.Hex())
 	require.ErrorIs(t, err, mongo.ErrNoDocuments)
 	all, err = r.FindAll(ctx)

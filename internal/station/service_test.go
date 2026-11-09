@@ -36,7 +36,7 @@ func TestGetStation(t *testing.T) {
 				return tc.station, tc.repoErr
 			}}
 
-			got, err := NewService(repo, nil).GetStation(context.Background(), tc.id)
+			got, err := NewService(repo, nil, directTransaction).GetStation(context.Background(), tc.id)
 
 			require.Equal(t, tc.queries, queried)
 			if tc.want != nil {
@@ -82,7 +82,7 @@ func TestDeleteStation(t *testing.T) {
 				return tc.count, tc.countErr
 			})
 
-			err := NewService(repo, counter).DeleteStation(context.Background(), tc.id)
+			err := NewService(repo, counter, directTransaction).DeleteStation(context.Background(), tc.id)
 
 			if tc.want == nil {
 				require.NoError(t, err)
@@ -115,7 +115,7 @@ func TestCreateStation(t *testing.T) {
 				require.Same(t, tc.input, s)
 				return tc.repoErr
 			}}
-			err := NewService(repo, nil).CreateStation(context.Background(), tc.input)
+			err := NewService(repo, nil, directTransaction).CreateStation(context.Background(), tc.input)
 			require.Equal(t, tc.creates, created)
 			if tc.want == nil {
 				require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestCreateStation(t *testing.T) {
 		s := validStation()
 		s.Code, s.Location.State, s.Thresholds = " IVA-001 ", "pr", nil
 		repo := &repositoryStub{create: func(context.Context, *Station) error { return nil }}
-		require.NoError(t, NewService(repo, nil).CreateStation(context.Background(), s))
+		require.NoError(t, NewService(repo, nil, directTransaction).CreateStation(context.Background(), s))
 		require.Equal(t, "IVA-001", s.Code)
 		require.Equal(t, "PR", s.Location.State)
 		require.Equal(t, []Threshold{}, s.Thresholds)
@@ -139,13 +139,13 @@ func TestCreateStation(t *testing.T) {
 func TestListStations(t *testing.T) {
 	stations := []Station{*validStation()}
 	repo := &repositoryStub{findAll: func(context.Context) ([]Station, error) { return stations, nil }}
-	got, err := NewService(repo, nil).ListStations(context.Background())
+	got, err := NewService(repo, nil, directTransaction).ListStations(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, stations, got)
 
 	failure := errors.New("storage unavailable")
 	repo = &repositoryStub{findAll: func(context.Context) ([]Station, error) { return nil, failure }}
-	_, err = NewService(repo, nil).ListStations(context.Background())
+	_, err = NewService(repo, nil, directTransaction).ListStations(context.Background())
 	require.ErrorIs(t, err, failure)
 }
 
@@ -188,7 +188,7 @@ func TestUpdateStation(t *testing.T) {
 					return stored, nil
 				},
 			}
-			got, err := NewService(repo, nil).UpdateStation(context.Background(), tc.id, tc.input)
+			got, err := NewService(repo, nil, directTransaction).UpdateStation(context.Background(), tc.id, tc.input)
 			require.Equal(t, tc.updates, updated)
 			if tc.want != nil {
 				require.ErrorIs(t, err, tc.want)

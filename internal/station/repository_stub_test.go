@@ -36,3 +36,7 @@ type sampleCounterStub func(context.Context, bson.ObjectID) (int64, error)
 func (f sampleCounterStub) CountByStation(ctx context.Context, id bson.ObjectID) (int64, error) {
 	return f(ctx, id)
 }
+
+func directTransaction(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}

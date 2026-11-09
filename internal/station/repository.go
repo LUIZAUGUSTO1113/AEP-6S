@@ -69,6 +69,18 @@ func (r *Repository) FindByID(ctx context.Context, id bson.ObjectID) (*Station, 
 	return &station, nil
 }
 
+// FindByIDForWrite takes a write lock in the transaction so concurrent station
+// deletion and sample creation cannot commit an orphaned reference.
+func (r *Repository) FindByIDForWrite(ctx context.Context, id bson.ObjectID) (*Station, error) {
+	var station Station
+	err := r.collection.FindOneAndUpdate(ctx, bson.M{"_id": id},
+		bson.M{"$inc": bson.M{"_sample_revision": 1}}).Decode(&station)
+	if err != nil {
+		return nil, err
+	}
+	return &station, nil
+}
+
 func (r *Repository) Update(ctx context.Context, id bson.ObjectID, station *Station) error {
 	update := bson.M{"$set": bson.M{
 		"name":       station.Name,
