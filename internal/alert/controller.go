@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 )
 
 type Controller struct {
@@ -26,7 +27,13 @@ func NewController(service *Service) *Controller {
 func (c *Controller) GetAll(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	alerts, err := c.service.List(r.Context(), r.URL.Query().Get("station_id"))
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": ErrInvalidStationID.Error()})
+		return
+	}
+	alerts, err := c.service.List(r.Context(), query.Get("station_id"))
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, ErrInvalidStationID) {

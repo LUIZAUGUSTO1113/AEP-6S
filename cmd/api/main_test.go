@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/alert"
+	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/database"
 	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/sample"
 	"github.com/LUIZAUGUSTO1113/AEP-6S/internal/station"
 	"github.com/stretchr/testify/require"
@@ -20,6 +21,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
+
+type sampleCounterFunc func(context.Context, bson.ObjectID) (int64, error)
+
+func (count sampleCounterFunc) CountByStation(ctx context.Context, id bson.ObjectID) (int64, error) {
+	return count(ctx, id)
+}
 
 // This package runs in its own go test process. The server started by main
 // terminates with that process; no application source changes are needed.
@@ -146,6 +153,8 @@ func TestMainHTTPIntegration(t *testing.T) {
 	firstAlert := alerts[0]
 	require.Equal(t, invalid.ID, firstAlert.SampleID)
 	require.Contains(t, firstAlert.Message, "IVA-001")
+	call("GET", "/samples?station_id=%ZZ", "", 400, nil)
+	call("GET", "/alerts?station_id=%ZZ", "", 400, nil)
 
 	var samples []sample.Sample
 	call("GET", samplesPath, "", 200, &samples)
@@ -196,31 +205,54 @@ func TestMainHTTPIntegration(t *testing.T) {
 	call("DELETE", stationPath, "", 204, nil)
 
 	raceStation := createStation("RACE-001")
-	type result struct {
-		status int
-		body   []byte
-		err    error
-	}
-	start := make(chan struct{})
-	post, remove := make(chan result, 1), make(chan result, 1)
+	raceCtx, cancelRace := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelRace()
+	counted := make(chan struct{})
+	resume := make(chan struct{})
+	repo := sample.NewRepository(db)
+	paused := false
+	counter := sampleCounterFunc(func(ctx context.Context, id bson.ObjectID) (int64, error) {
+		count, err := repo.CountByStation(ctx, id)
+		if err != nil || paused {
+			return count, err
+		}
+		// Pause the first delete after its snapshot sees an empty station.
+		paused = true
+		close(counted)
+		select {
+		case <-resume:
+			return count, nil
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		}
+	})
+	stationService := station.NewService(station.NewRepository(db), counter, database.MongoTransaction(client))
+	deleted := make(chan error, 1)
 	go func() {
-		<-start
-		status, body, err := request("POST", "/samples", sampleBody(raceStation, 4.2))
-		post <- result{status, body, err}
+		deleted <- stationService.DeleteStation(raceCtx, raceStation)
 	}()
-	go func() {
-		<-start
-		status, body, err := request("DELETE", "/stations/"+raceStation, "")
-		remove <- result{status, body, err}
-	}()
-	close(start)
-	created, deleted := <-post, <-remove
-	require.NoError(t, created.err)
-	require.NoError(t, deleted.err)
-	if created.status == 201 {
-		require.Equal(t, 409, deleted.status, "%s", deleted.body)
-	} else {
-		require.Equal(t, 404, created.status, "%s", created.body)
-		require.Equal(t, 204, deleted.status, "%s", deleted.body)
+	select {
+	case <-counted:
+	case err := <-deleted:
+		t.Fatalf("delete finished before counting samples: %v", err)
+	case <-raceCtx.Done():
+		t.Fatal(raceCtx.Err())
 	}
+
+	var concurrentSample sample.Sample
+	call("POST", "/samples", sampleBody(raceStation, 4.2), 201, &concurrentSample)
+	close(resume)
+	select {
+	case err := <-deleted:
+		require.ErrorIs(t, err, station.ErrStationHasSamples)
+	case <-raceCtx.Done():
+		t.Fatal(raceCtx.Err())
+	}
+	call("GET", "/stations/"+raceStation, "", 200, nil)
+	call("GET", "/samples?station_id="+raceStation, "", 200, &samples)
+	require.Len(t, samples, 1)
+	require.Equal(t, concurrentSample.ID, samples[0].ID)
+	call("GET", "/alerts?station_id="+raceStation, "", 200, &alerts)
+	require.Len(t, alerts, 1)
+	require.Equal(t, concurrentSample.ID, alerts[0].SampleID)
 }
