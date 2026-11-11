@@ -13,6 +13,17 @@ type Repository struct {
 	collection *mongo.Collection
 }
 
+func (r *Repository) EnsureIndexes(ctx context.Context) error {
+	_, err := r.collection.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "station_id", Value: 1}},
+	})
+	return err
+}
+
+func (r *Repository) CountByStation(ctx context.Context, stationID bson.ObjectID) (int64, error) {
+	return r.collection.CountDocuments(ctx, bson.M{"station_id": stationID})
+}
+
 func NewRepository(db *mongo.Database) *Repository {
 	return &Repository{
 		collection: db.Collection("samples"),
@@ -33,13 +44,21 @@ func (r *Repository) Create(ctx context.Context, sample *Sample) error {
 }
 
 func (r *Repository) FindAll(ctx context.Context) ([]Sample, error) {
-	cursor, err := r.collection.Find(ctx, bson.M{})
+	return r.find(ctx, bson.M{})
+}
+
+func (r *Repository) FindByStation(ctx context.Context, stationID bson.ObjectID) ([]Sample, error) {
+	return r.find(ctx, bson.M{"station_id": stationID})
+}
+
+func (r *Repository) find(ctx context.Context, filter bson.M) ([]Sample, error) {
+	cursor, err := r.collection.Find(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("error querying samples: %w", err)
 	}
 	defer cursor.Close(ctx)
 
-	var samples []Sample
+	samples := []Sample{}
 	if err := cursor.All(ctx, &samples); err != nil {
 		return nil, fmt.Errorf("error decoding samples: %w", err)
 	}

@@ -2,15 +2,15 @@
 
 # Regenerate Swagger documentation
 swagger:
-	swag init -g main.go -d cmd/api,internal/sample --parseInternal
+	swag init -g cmd/api/main.go --parseDependency --parseInternal
 
 # Fast local development: regenerate Swagger and run native Go
 run: swagger
-	go run cmd/api/main.go
+	go run ./cmd/api
 
 # Start only the local MongoDB database for development
 docker-up:
-	docker compose up -d mongodb
+	docker compose up -d --wait mongodb
 
 # Stop Docker containers
 docker-down:
