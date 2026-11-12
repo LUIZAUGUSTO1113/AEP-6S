@@ -3,13 +3,17 @@ name: aep-tests
 services:
   mongodb-test:
     image: mongo:7.0
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "127.0.0.1:27018:27017"
-    # Disposable storage, independent of the application's mongo_data volume.
+    environment:
+      MONGO_REPLICA_MEMBER: mongodb-test:27017
     tmpfs:
       - /data/db
+    volumes:
+      - ./docker/replica-health.js:/usr/local/bin/replica-health.js:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.adminCommand('ping').ok ? 0 : 1)"]
+      test: ["CMD", "mongosh", "--host", "mongodb-test", "--quiet", "--file", "/usr/local/bin/replica-health.js"]
       interval: 2s
       timeout: 5s
       retries: 30

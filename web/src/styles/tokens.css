@@ -1,0 +1,23 @@
+:root {
+  --paper: #f3f0e8;
+  --surface: #fffcf7;
+  --ink: #1a1814;
+  --ink-muted: #4a453c;
+  --line: #ddd6c8;
+  --river: #0f4c5c;
+  --river-press: #0c3d4a;
+  --alert-fg: #8c2f1b;
+  --alert-bg: #f6e6df;
+  --ok-fg: #1f4d32;
+  --ok-bg: #e5efe8;
+  --radius: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+}

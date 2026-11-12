@@ -9,3 +9,7 @@ coverage.html
 
 # Variáveis de ambiente
 .env
+
+# Frontend Vue
+web/node_modules
+web/dist
